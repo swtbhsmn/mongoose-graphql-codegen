@@ -94,6 +94,10 @@ export const resolvers = mergeResolvers([scalarResolvers, ...resolversArray]);
   fs.writeFileSync(path.join(outputDir, `index${ext}`), scalars.trim());
 }
 
+function capitalize(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 export async function generateGraphQL(modelFilePath: string, useJS: boolean = false): Promise<void> {
   const absPath = path.resolve(modelFilePath);
   const model = require(absPath);
@@ -105,15 +109,42 @@ export async function generateGraphQL(modelFilePath: string, useJS: boolean = fa
 
   requiredScalars.clear();
 
+  const nestedTypes: Record<string, Record<string, string>> = {};
+
   let gqlFields = '';
   for (const field in schema) {
     if (field === '__v') continue;
+
     const fieldInfo = schema[field];
     const isRequired = !!fieldInfo.isRequired;
+
+    // Handle nested fields (e.g. seo.metaTitle → type SEO { metaTitle: String })
+    if (field.includes('.')) {
+      const [parent, child] = field.split('.');
+      const nestedTypeName = capitalize(parent);
+      nestedTypes[nestedTypeName] = nestedTypes[nestedTypeName] || {};
+
+      const nestedFieldType = mapType(fieldInfo.instance, fieldInfo.caster?.instance, fieldInfo.options);
+      nestedTypes[nestedTypeName][child] = nestedFieldType;
+      continue; // don't add to top-level gqlFields
+    }
+
     const fieldType = mapType(fieldInfo.instance, fieldInfo.caster?.instance, fieldInfo.options);
-    const _fieldType = isRequired ? `${fieldType}!` : `${fieldType}`;
+    const _fieldType = isRequired ? `${fieldType}!` : fieldType;
     gqlFields += `  ${field}: ${_fieldType}\n`;
   }
+
+  // Add nested field types to gqlFields
+  for (const typeName in nestedTypes) {
+    gqlFields += `  ${typeName.toLowerCase()}: ${typeName}\n`;
+  }
+
+  const nestedTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => {
+    const fieldDefs = Object.entries(fields)
+      .map(([f, t]) => `  ${f}: ${t}`)
+      .join('\n');
+    return `type ${typeName} {\n${fieldDefs}\n}`;
+  }).join('\n\n');
 
   const gqlType = `type ${singular} {\n${gqlFields}}\n`;
   const gqlInput = `input ${singular}Input {\n${gqlFields}}\n`;
@@ -136,6 +167,8 @@ scalar Base64
 
   const gqlSchema = `
 ${scalarDeclarations}
+
+${nestedTypeDefs}
 
 ${gqlType}
 ${gqlInput}
