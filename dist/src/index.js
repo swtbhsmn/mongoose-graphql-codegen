@@ -123,8 +123,11 @@ async function generateGraphQL(modelFilePath, useJS = false) {
     for (const field in schema) {
         if (field === '__v')
             continue;
+        const fieldInfo = schema[field];
+        const isRequired = !!fieldInfo.isRequired;
         const fieldType = mapType(schema[field].instance, schema[field].caster?.instance, schema[field].options);
-        gqlFields += `  ${field}: ${fieldType}\n`;
+        const _fieldType = isRequired ? `${fieldType}!` : `${fieldType}`;
+        gqlFields += `  ${field}: ${_fieldType}\n`;
     }
     const gqlType = `type ${singular} {\n${gqlFields}}\n`;
     const gqlInput = `input ${singular}Input {\n${gqlFields}}\n`;

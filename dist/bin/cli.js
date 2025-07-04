@@ -9,7 +9,6 @@ const index_1 = require("../src/index");
 const args = process.argv.slice(2);
 const modelPath = args[0];
 const useJS = args.includes('--js');
-console.log(args);
 if (!modelPath) {
     console.error('❌ Please provide a path to the Mongoose model file.');
     process.exit(1);
