@@ -43,7 +43,6 @@ modelPath ? ((0, index_1.generateGraphQL)(path_1.default.resolve(modelPath), use
     process.exit(1);
 })) :
     (files.map((file) => {
-        console.log(useJS);
         (0, index_1.generateGraphQL)(outDir + "/" + file, useJS)
             .catch((err) => {
             console.error('❌ Generation failed:', err.message);
