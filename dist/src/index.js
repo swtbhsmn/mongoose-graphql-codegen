@@ -11,9 +11,7 @@ const requiredScalars = new Set();
 function mapType(instance, casterInstance, options) {
     switch (instance) {
         case 'String': return 'String';
-        case 'Number':
-            const type = options?.int || options?.isInt ? 'Int' : 'Float';
-            return type;
+        case 'Number': return options?.int || options?.isInt ? 'Int' : 'Float';
         case 'Boolean': return 'Boolean';
         case 'Date':
             requiredScalars.add('Date');
@@ -39,8 +37,7 @@ function mapType(instance, casterInstance, options) {
         case 'Array':
             const itemType = mapType(casterInstance || 'Mixed');
             return `[${itemType}]`;
-        default:
-            return 'String';
+        default: return 'String';
     }
 }
 function writeScalarResolvers(outputDir, useJS) {
@@ -77,22 +74,8 @@ export const scalarResolvers = {
 }
 function combiningResolverAndGraphQL(outputDir, useJS) {
     const ext = useJS ? '.js' : '.ts';
-    const scalars = !useJS ? `
-// graphql-codegen/index.ts
-
-import path from 'path';
-import { loadFilesSync } from '@graphql-tools/load-files';
-import { mergeTypeDefs, mergeResolvers } from '@graphql-tools/merge';
-
-const typesArray = loadFilesSync(path.join(__dirname, './**/*.graphql'));
-const resolversArray = loadFilesSync(path.join(__dirname, './**/*Resolver.ts'));
-import { scalarResolvers } from './scalarResolvers';
-
-export const typeDefs = mergeTypeDefs(typesArray);
-export const resolvers = mergeResolvers([scalarResolvers, ...resolversArray]);
-  `
-        :
-            `
+    const scalars = useJS
+        ? `
 const path = require('path');
 const { loadFilesSync } = require('@graphql-tools/load-files');
 const { mergeTypeDefs, mergeResolvers } = require('@graphql-tools/merge');
@@ -107,7 +90,18 @@ const resolvers = mergeResolvers([scalarResolvers, ...resolversArray]);
 module.exports = {
   typeDefs,
   resolvers
-};
+};`
+        : `
+import path from 'path';
+import { loadFilesSync } from '@graphql-tools/load-files';
+import { mergeTypeDefs, mergeResolvers } from '@graphql-tools/merge';
+import { scalarResolvers } from './scalarResolvers';
+
+const typesArray = loadFilesSync(path.join(__dirname, './**/*.graphql'));
+const resolversArray = loadFilesSync(path.join(__dirname, './**/*Resolver.ts'));
+
+export const typeDefs = mergeTypeDefs(typesArray);
+export const resolvers = mergeResolvers([scalarResolvers, ...resolversArray]);
 `;
     fs_1.default.writeFileSync(path_1.default.join(outputDir, `index${ext}`), scalars.trim());
 }
@@ -125,13 +119,12 @@ async function generateGraphQL(modelFilePath, useJS = false) {
             continue;
         const fieldInfo = schema[field];
         const isRequired = !!fieldInfo.isRequired;
-        const fieldType = mapType(schema[field].instance, schema[field].caster?.instance, schema[field].options);
+        const fieldType = mapType(fieldInfo.instance, fieldInfo.caster?.instance, fieldInfo.options);
         const _fieldType = isRequired ? `${fieldType}!` : `${fieldType}`;
         gqlFields += `  ${field}: ${_fieldType}\n`;
     }
     const gqlType = `type ${singular} {\n${gqlFields}}\n`;
     const gqlInput = `input ${singular}Input {\n${gqlFields}}\n`;
-    //Array.from(requiredScalars).map(s => `scalar ${s}`).join('\n');
     const scalarDeclarations = `
 scalar JSON
 scalar Decimal
@@ -139,16 +132,24 @@ scalar Long
 scalar Date
 scalar UUID
 scalar Base64
-  `;
+`;
+    const gqlPaginationType = `type ${singular}PaginationResult {
+  data: [${singular}!]!
+  totalCount: Int!
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+}`;
     const gqlSchema = `
 ${scalarDeclarations}
 
 ${gqlType}
 ${gqlInput}
 
+${gqlPaginationType}
+
 type Query {
   get${singular}(id: ID!): ${singular}
-  getAll${plural}: [${singular}]
+  getAll${plural}(limit: Int, offset: Int): ${singular}PaginationResult
 }
 
 type Mutation {
@@ -178,8 +179,18 @@ ${exportSyntax}
       if (!doc) throw new GraphQLError("${singular} not found", { extensions: { code: "NOT_FOUND", statusCode: 404 } });
       return doc;
     },
-    async getAll${plural}() {
-      return await ${modelName}.find();
+    async getAll${plural}(_, { limit = 10, offset = 0 }) {
+      const [data, totalCount] = await Promise.all([
+        ${modelName}.find().skip(offset).limit(limit),
+        ${modelName}.countDocuments()
+      ]);
+
+      return {
+        data,
+        totalCount,
+        hasNextPage: offset + limit < totalCount,
+        hasPreviousPage: offset > 0
+      };
     },
   },
   Mutation: {
