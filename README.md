@@ -26,7 +26,7 @@ npm install -D mongoose-graphql-codegen
 
 Your project must include:
 ```bash
-npm install mongoose graphql graphql-scalars validator pluralize
+npm install mongoose graphql graphql-scalars validator pluralize @graphql-tools/load-files @graphql-tools/merge
 ```
 
 ---
@@ -83,19 +83,6 @@ npx mongoose-graphql-codegen ./models/User.js
 npx mongoose-graphql-codegen ./models/User.js --js
 ```
 
-### Using in npm script
-```json
-"scripts": {
-  "generate:gql": "mongoose-graphql-codegen ./models/User.js --js"
-}
-```
-Then run:
-```bash
-npm run generate:gql
-```
-
----
-
 ## 📁 Output Structure
 
 After generation:
@@ -109,16 +96,32 @@ graphql-codegen/
 
 ---
 
-## 🛠 Integrate into GraphQL Server
+## 🛠 Integrate into Apollo GraphQL Server
 
 ```js
-const { resolvers } = require('./graphql-codegen/user/UserResolver');
-const { scalarResolvers } = require('./graphql-codegen/scalarResolvers');
+//<filename>.js
+const { ApolloServer } = require('@apollo/server');
+const {typeDefs,resolvers} = require('../graphql-codegen')
 
-const combinedResolvers = {
-  ...resolvers,
-  ...scalarResolvers,
-};
+async function createApolloServer() {
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers
+  });
+  await server.start();
+  return server;
+}
+
+module.exports = createApolloServer;
+
+// add.js
+const bodyParser = require('body-parser');
+const { expressMiddleware } = require('@apollo/server/express4');
+const createApolloServer = require('./graphql/server');
+(async () => {
+const apolloServer = await createApolloServer();
+app.use('/graphql', bodyParser.json(), expressMiddleware(apolloServer));
+})();
 
 // Use in ApolloServer, Mercurius, Yoga, etc.
 ```
@@ -127,8 +130,6 @@ const combinedResolvers = {
 
 ## 📌 Coming Soon
 - `--outDir` support
-- Multiple model generation
-- ESM support
 - GraphQL federation/directives
 
 ---

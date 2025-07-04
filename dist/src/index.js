@@ -1,5 +1,4 @@
 "use strict";
-// mongoose-graphql-codegen/src/index.ts
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -8,34 +7,50 @@ exports.generateGraphQL = generateGraphQL;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const pluralize_1 = __importDefault(require("pluralize"));
+const requiredScalars = new Set();
 function mapType(instance, casterInstance, options) {
     switch (instance) {
         case 'String': return 'String';
-        case 'Number': return options?.int || options?.isInt ? 'Int' : 'Float';
+        case 'Number':
+            const type = options?.int || options?.isInt ? 'Int' : 'Float';
+            return type;
         case 'Boolean': return 'Boolean';
-        case 'Date': return 'Date';
-        case 'Buffer': return 'Base64';
+        case 'Date':
+            requiredScalars.add('Date');
+            return 'Date';
+        case 'Buffer':
+            requiredScalars.add('Base64');
+            return 'Base64';
         case 'ObjectID': return 'ID';
-        case 'Decimal128': return 'Decimal';
-        case 'Long': return 'Long';
-        case 'UUID': return 'UUID';
+        case 'Decimal128':
+            requiredScalars.add('Decimal');
+            return 'Decimal';
+        case 'Long':
+            requiredScalars.add('Long');
+            return 'Long';
+        case 'UUID':
+            requiredScalars.add('UUID');
+            return 'UUID';
         case 'Mixed':
         case 'Map':
-        case 'Object': return 'JSON';
+        case 'Object':
+            requiredScalars.add('JSON');
+            return 'JSON';
         case 'Array':
             const itemType = mapType(casterInstance || 'Mixed');
             return `[${itemType}]`;
-        default: return 'String';
+        default:
+            return 'String';
     }
 }
 function writeScalarResolvers(outputDir, useJS) {
     const ext = useJS ? '.js' : '.ts';
     const scalars = useJS
-        ? `const { GraphQLJSON, GraphQLDecimal, GraphQLLong, GraphQLDate, GraphQLUUID, GraphQLByte } = require('graphql-scalars');
-
+        ? `
+const { GraphQLJSON, GraphQLHexadecimal, GraphQLLong, GraphQLDate, GraphQLUUID, GraphQLByte } = require('graphql-scalars');
 module.exports.scalarResolvers = {
   JSON: GraphQLJSON,
-  Decimal: GraphQLDecimal,
+  Decimal: GraphQLHexadecimal,
   Long: GraphQLLong,
   Date: GraphQLDate,
   UUID: GraphQLUUID,
@@ -43,7 +58,7 @@ module.exports.scalarResolvers = {
 };`
         : `import {
   GraphQLJSON,
-  GraphQLDecimal,
+  GraphQLHexadecimal,
   GraphQLLong,
   GraphQLDate,
   GraphQLUUID,
@@ -52,13 +67,49 @@ module.exports.scalarResolvers = {
 
 export const scalarResolvers = {
   JSON: GraphQLJSON,
-  Decimal: GraphQLDecimal,
+  Decimal: GraphQLHexadecimal,
   Long: GraphQLLong,
   Date: GraphQLDate,
   UUID: GraphQLUUID,
   Base64: GraphQLByte,
 };`;
     fs_1.default.writeFileSync(path_1.default.join(outputDir, `scalarResolvers${ext}`), scalars.trim());
+}
+function combiningResolverAndGraphQL(outputDir, useJS) {
+    const ext = useJS ? '.js' : '.ts';
+    const scalars = !useJS ? `
+// graphql-codegen/index.ts
+
+import path from 'path';
+import { loadFilesSync } from '@graphql-tools/load-files';
+import { mergeTypeDefs, mergeResolvers } from '@graphql-tools/merge';
+
+const typesArray = loadFilesSync(path.join(__dirname, './**/*.graphql'));
+const resolversArray = loadFilesSync(path.join(__dirname, './**/*Resolver.ts'));
+import { scalarResolvers } from './scalarResolvers';
+
+export const typeDefs = mergeTypeDefs(typesArray);
+export const resolvers = mergeResolvers([scalarResolvers, ...resolversArray]);
+  `
+        :
+            `
+const path = require('path');
+const { loadFilesSync } = require('@graphql-tools/load-files');
+const { mergeTypeDefs, mergeResolvers } = require('@graphql-tools/merge');
+const { scalarResolvers } = require('./scalarResolvers');
+
+const typesArray = loadFilesSync(path.join(__dirname, './**/*.graphql'));
+const resolversArray = loadFilesSync(path.join(__dirname, './**/*Resolver.js'));
+
+const typeDefs = mergeTypeDefs(typesArray);
+const resolvers = mergeResolvers([scalarResolvers, ...resolversArray]);
+
+module.exports = {
+  typeDefs,
+  resolvers
+};
+`;
+    fs_1.default.writeFileSync(path_1.default.join(outputDir, `index${ext}`), scalars.trim());
 }
 async function generateGraphQL(modelFilePath, useJS = false) {
     const absPath = path_1.default.resolve(modelFilePath);
@@ -67,6 +118,7 @@ async function generateGraphQL(modelFilePath, useJS = false) {
     const schema = model.schema.paths;
     const singular = modelName;
     const plural = (0, pluralize_1.default)(modelName.toLowerCase());
+    requiredScalars.clear();
     let gqlFields = '';
     for (const field in schema) {
         if (field === '__v')
@@ -74,18 +126,19 @@ async function generateGraphQL(modelFilePath, useJS = false) {
         const fieldType = mapType(schema[field].instance, schema[field].caster?.instance, schema[field].options);
         gqlFields += `  ${field}: ${fieldType}\n`;
     }
-    const customScalars = [
-        'scalar JSON',
-        'scalar Decimal',
-        'scalar Long',
-        'scalar Date',
-        'scalar UUID',
-        'scalar Base64'
-    ];
     const gqlType = `type ${singular} {\n${gqlFields}}\n`;
     const gqlInput = `input ${singular}Input {\n${gqlFields}}\n`;
+    //Array.from(requiredScalars).map(s => `scalar ${s}`).join('\n');
+    const scalarDeclarations = `
+scalar JSON
+scalar Decimal
+scalar Long
+scalar Date
+scalar UUID
+scalar Base64
+  `;
     const gqlSchema = `
-${customScalars.join('\n')}
+${scalarDeclarations}
 
 ${gqlType}
 ${gqlInput}
@@ -99,7 +152,7 @@ type Mutation {
   create${singular}(input: ${singular}Input!): ${singular}
   update${singular}(id: ID!, input: ${singular}Input!): ${singular}
   delete${singular}(id: ID!): Boolean
-}`;
+}`.trim();
     const relPath = path_1.default.relative(path_1.default.join(process.cwd(), 'graphql-codegen', singular.toLowerCase()), absPath).replace(/\\/g, '/');
     const ext = useJS ? '.js' : '.ts';
     const importSyntax = useJS
@@ -107,7 +160,8 @@ type Mutation {
         : `import { GraphQLError } from 'graphql';\nimport validator from 'validator';\nimport ${modelName} from '${relPath}';`;
     const exportSyntax = useJS
         ? `module.exports.resolvers = {
-  Query: {` : `export const resolvers = {
+  Query: {`
+        : `export const resolvers = {
   Query: {`;
     const resolverCode = `
 ${importSyntax}
@@ -153,5 +207,6 @@ ${exportSyntax}
     fs_1.default.writeFileSync(path_1.default.join(outDir, `${singular}Resolver${ext}`), resolverCode.trim());
     const rootOutDir = path_1.default.join(process.cwd(), 'graphql-codegen');
     writeScalarResolvers(rootOutDir, useJS);
+    combiningResolverAndGraphQL(rootOutDir, useJS);
     console.log(`✅ Generated GraphQL schema, resolvers, and scalars in graphql-codegen/${singular.toLowerCase()}`);
 }
