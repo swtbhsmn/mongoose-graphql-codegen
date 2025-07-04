@@ -123,31 +123,45 @@ async function generateGraphQL(modelFilePath, useJS = false) {
             continue;
         const fieldInfo = schema[field];
         const isRequired = !!fieldInfo.isRequired;
-        // Handle nested fields (e.g. seo.metaTitle → type SEO { metaTitle: String })
+        // Handle nested fields
         if (field.includes('.')) {
             const [parent, child] = field.split('.');
             const nestedTypeName = capitalize(parent);
             nestedTypes[nestedTypeName] = nestedTypes[nestedTypeName] || {};
             const nestedFieldType = mapType(fieldInfo.instance, fieldInfo.caster?.instance, fieldInfo.options);
             nestedTypes[nestedTypeName][child] = nestedFieldType;
-            continue; // don't add to top-level gqlFields
+            continue;
         }
         const fieldType = mapType(fieldInfo.instance, fieldInfo.caster?.instance, fieldInfo.options);
         const _fieldType = isRequired ? `${fieldType}!` : fieldType;
         gqlFields += `  ${field}: ${_fieldType}\n`;
     }
-    // Add nested field types to gqlFields
+    // Add references to nested types
     for (const typeName in nestedTypes) {
         gqlFields += `  ${typeName.toLowerCase()}: ${typeName}\n`;
     }
+    // Create nested type definitions
     const nestedTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => {
         const fieldDefs = Object.entries(fields)
             .map(([f, t]) => `  ${f}: ${t}`)
             .join('\n');
         return `type ${typeName} {\n${fieldDefs}\n}`;
     }).join('\n\n');
-    const gqlType = `type ${singular} {\n${gqlFields}}\n`;
-    const gqlInput = `input ${singular}Input {\n${gqlFields}}\n`;
+    // Create nested input type definitions
+    const nestedInputTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => {
+        const fieldDefs = Object.entries(fields)
+            .map(([f, t]) => `  ${f}: ${t}`)
+            .join('\n');
+        return `input ${typeName}Input {\n${fieldDefs}\n}`;
+    }).join('\n\n');
+    // Replace nested types in input
+    let gqlInputFields = gqlFields;
+    for (const typeName in nestedTypes) {
+        const regex = new RegExp(`(${typeName.toLowerCase()}): ${typeName}`, 'g');
+        gqlInputFields = gqlInputFields.replace(regex, `$1: ${typeName}Input`);
+    }
+    const gqlType = `type ${singular} {\n${gqlFields}}`;
+    const gqlInput = `input ${singular}Input {\n${gqlInputFields}}`;
     const scalarDeclarations = `
 scalar JSON
 scalar Decimal
@@ -166,6 +180,8 @@ scalar Base64
 ${scalarDeclarations}
 
 ${nestedTypeDefs}
+
+${nestedInputTypeDefs}
 
 ${gqlType}
 ${gqlInput}
