@@ -72,15 +72,20 @@ module.exports = mongoose.model('User', userSchema);
 ---
 
 ## ⚙️ Usage
-
-### TypeScript graphql-codegen (default)
+##  TypeScript Generate for all models in the models directory
 ```bash
-npx mongoose-graphql-codegen ./models/User.js
+npx mongoose-graphql-codegen
 ```
 
-### JavaScript (CommonJS) graphql-codegen
+##  Javascript Generate for all models in the models directory
 ```bash
-npx mongoose-graphql-codegen ./models/User.js --js
+npx mongoose-graphql-codegen js=true
+```
+
+
+### JavaScript (CommonJS) graphql-codegen generate for a single Mongoose model
+```bash
+npx mongoose-graphql-codegen model=./models/User.js js=true
 ```
 
 ## 📁 Output Structure
