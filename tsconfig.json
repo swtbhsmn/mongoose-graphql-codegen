@@ -4,9 +4,17 @@
     "module": "CommonJS",
     "rootDir": ".",
     "outDir": "dist",
+    "declaration": true,
+    "declarationDir": "dist",
+    "emitDeclarationOnly": false,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "strict": true
+    "strict": true,
+    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "baseUrl": ".",
+    "paths": {
+      "mongoose-graphql-codegen": ["mongoose-graphql-codegen/dist/src/index"]
+    }
   },
   "include": ["src", "bin"]
 }

@@ -1,8 +1,9 @@
 {
   "name": "mongoose-graphql-codegen",
-  "version": "1.1.5",
+  "version": "1.2.0",
   "description": "Generate GraphQL schema and resolvers from Mongoose models (including BSON types)",
   "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "bin": {
     "mongoose-graphql-codegen": "./dist/bin/cli.js"
   },
