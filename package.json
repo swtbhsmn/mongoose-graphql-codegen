@@ -1,15 +1,23 @@
 {
   "name": "mongoose-graphql-codegen",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "Generate GraphQL schema and resolvers from Mongoose models (including BSON types)",
-  "main": "dist/src/index.js",
-  "types": "dist/src/index.d.ts",
+  "main": "./dist/cjs/bin/cli.js",
+  "module": "./dist/esm/bin/cli.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    "import": "./dist/esm/bin/cli.js",
+    "require": "./dist/cjs/bin/cli.js"
+  },
   "bin": {
-    "mongoose-graphql-codegen": "./dist/bin/cli.js"
+    "mongoose-graphql-codegen": "./dist/cjs/bin/cli.js"
   },
   "scripts": {
-    "build": "tsc",
-    "generate": "node dist/bin/cli.js"
+    "build:cjs": "tsc -p tsconfig.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build": "npm run build:cjs && npm run build:esm",
+    "generate": "node dist/cjs/bin/cli.js",
+    "generate:ts": "ts-node ./bin/cli.ts"
   },
   "keywords": [
     "mongoose",
@@ -33,15 +41,13 @@
   "dependencies": {
     "@graphql-tools/load-files": "^7.0.1",
     "@graphql-tools/merge": "^9.0.24",
+    "@types/node": "^20.19.4",
+    "@types/pluralize": "^0.0.33",
     "graphql": "^16.8.0",
     "graphql-scalars": "^1.22.5",
     "mongoose": "^7.6.1",
     "pluralize": "^8.0.0",
-    "validator": "^13.9.0"
-  },
-  "devDependencies": {
-    "@types/node": "^20.8.5",
-    "@types/pluralize": "^0.0.33",
+    "validator": "^13.9.0",
     "ts-node": "^10.9.1",
     "typescript": "^5.2.2"
   }

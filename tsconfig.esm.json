@@ -1,15 +1,15 @@
-// tsconfig.cjs.json
+// tsconfig.esm.json
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "CommonJS",
+    "module": "ESNext",
     "rootDir": ".",
-    "outDir": "dist/cjs",
-    "declaration": true,
-    "declarationDir": "dist/types",
+    "outDir": "dist/esm",
+    "declaration": false, 
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "strict": true
+    "strict": true,
+    "moduleResolution": "node"
   },
   "include": ["src", "bin"],
   "exclude": ["dist", "node_modules"]

@@ -1,45 +1,6 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateGraphQL = generateGraphQL;
-const fs_1 = __importDefault(require("fs"));
-const path_1 = __importDefault(require("path"));
-const pluralize_1 = __importDefault(require("pluralize"));
+import fs from 'fs';
+import path from 'path';
+import pluralize from 'pluralize';
 // A map of all available scalar types from graphql-scalars and their corresponding imports.
 const ALL_SCALARS = {
     JSON: 'GraphQLJSON',
@@ -78,7 +39,7 @@ function mapType(instance, casterInstance, options) {
 function writeScalarResolvers(outputDir, useJS, requiredScalars) {
     if (requiredScalars.size === 0) {
         const emptyContent = useJS ? 'module.exports.scalarResolvers = {};' : 'export const scalarResolvers = {};';
-        fs_1.default.writeFileSync(path_1.default.join(outputDir, `scalarResolvers${useJS ? '.js' : '.ts'}`), emptyContent);
+        fs.writeFileSync(path.join(outputDir, `scalarResolvers${useJS ? '.js' : '.ts'}`), emptyContent);
         return;
     }
     const ext = useJS ? '.js' : '.ts';
@@ -97,7 +58,7 @@ ${resolverEntries.join('\n')}
 export const scalarResolvers = {
 ${resolverEntries.join('\n')}
 };`;
-    fs_1.default.writeFileSync(path_1.default.join(outputDir, `scalarResolvers${ext}`), content.trim());
+    fs.writeFileSync(path.join(outputDir, `scalarResolvers${ext}`), content.trim());
 }
 function combiningResolverAndGraphQL(outputDir, useJS) {
     const ext = useJS ? '.js' : '.ts';
@@ -129,21 +90,21 @@ const resolversArray = loadFilesSync(path.join(__dirname, './**/*${resolverExt}'
 export const typeDefs = mergeTypeDefs(typesArray);
 export const resolvers = mergeResolvers([scalarResolvers, ...resolversArray]);
 `;
-    fs_1.default.writeFileSync(path_1.default.join(outputDir, `index${ext}`), content.trim());
+    fs.writeFileSync(path.join(outputDir, `index${ext}`), content.trim());
 }
 function capitalize(str) {
     return str.charAt(0).toUpperCase() + str.slice(1);
 }
-async function generateGraphQL(modelFilePath, useJS = false) {
+export async function generateGraphQL(modelFilePath, useJS = false) {
     try {
         // ... all existing code from the function
-        const absPath = path_1.default.resolve(modelFilePath);
-        const modelModule = await Promise.resolve(`${absPath}`).then(s => __importStar(require(s)));
+        const absPath = path.resolve(modelFilePath);
+        const modelModule = await import(absPath);
         const model = modelModule.default || modelModule;
         const modelName = model.modelName;
         const schema = model.schema.paths;
         const singular = modelName;
-        const plural = (0, pluralize_1.default)(singular);
+        const plural = pluralize(singular);
         const scalarsForThisModel = new Set();
         const nestedTypes = {};
         let gqlFields = '';
@@ -175,17 +136,17 @@ async function generateGraphQL(modelFilePath, useJS = false) {
             gqlInputFields += `  ${fieldName}: ${typeName}Input\n`;
         }
         // --- Centralized Scalar Management ---
-        const rootOutDir = path_1.default.join(process.cwd(), 'graphql-codegen');
-        const filePathScalar = path_1.default.join(rootOutDir, 'customScalar.json');
+        const rootOutDir = path.join(process.cwd(), 'graphql-codegen');
+        const filePathScalar = path.join(rootOutDir, 'customScalar.json');
         // 1. Read existing scalars from the central JSON file.
-        const existingScalars = fs_1.default.existsSync(filePathScalar)
-            ? JSON.parse(fs_1.default.readFileSync(filePathScalar, 'utf8'))
+        const existingScalars = fs.existsSync(filePathScalar)
+            ? JSON.parse(fs.readFileSync(filePathScalar, 'utf8'))
             : [];
         // 2. Merge existing scalars with scalars required by the current model.
         const allRequiredScalars = new Set([...existingScalars, ...scalarsForThisModel]);
         // 3. Write the complete, merged list back to the JSON file for future runs.
-        fs_1.default.mkdirSync(rootOutDir, { recursive: true });
-        fs_1.default.writeFileSync(filePathScalar, JSON.stringify(Array.from(allRequiredScalars), null, 2));
+        fs.mkdirSync(rootOutDir, { recursive: true });
+        fs.writeFileSync(filePathScalar, JSON.stringify(Array.from(allRequiredScalars), null, 2));
         // --- GQL Schema Generation ---
         const scalarDeclarations = Array.from(allRequiredScalars).map(s => `scalar ${s}`).join('\n');
         const nestedTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => `type ${typeName} {\n${Object.entries(fields).map(([f, t]) => `  ${f}: ${t}`).join('\n')}\n}`).join('\n\n');
@@ -210,12 +171,12 @@ type Mutation {
   delete${singular}(id: ID!): Boolean
 }`.trim().replace(/\n\n+/g, '\n\n').replace(/^(\s*\n){2,}/gm, '\n');
         // --- Resolver Generation ---
-        const outDir = path_1.default.join(rootOutDir, singular.toLowerCase());
-        const relPath = path_1.default.relative(outDir, absPath).replace(/\\/g, '/');
+        const outDir = path.join(rootOutDir, singular.toLowerCase());
+        const relPath = path.relative(outDir, absPath).replace(/\\/g, '/');
         const ext = useJS ? '.js' : '.ts';
         const importSyntax = useJS
             ? `const { GraphQLError } = require('graphql');\nconst validator = require('validator');\nconst ${modelName} = require('${relPath}');`
-            : `import { GraphQLError } from 'graphql';\nimport validator from 'validator';\nimport type { ${singular} } from '${relPath}';\nimport ${modelName} from '${relPath}';`;
+            : `import { GraphQLError } from 'graphql';\nimport validator from 'validator';\nimport ${modelName} from '${relPath}';`;
         let resolverCode = '';
         if (useJS) {
             resolverCode = `
@@ -304,7 +265,7 @@ export const resolvers = {
     },
   },
   Mutation: {
-    async create${singular}(_: unknown, { input }: { input: Omit<${singular}, '_id'> }) {
+    async create${singular}(_: unknown, { input }: { input: Omit<any, '_id'> }) {
       try {
         const doc = new ${modelName}(input);
         await doc.save();
@@ -316,7 +277,7 @@ export const resolvers = {
         throw new GraphQLError(err.message, { extensions: { code: "BAD_REQUEST", http: { status: 400 } } });
       }
     },
-    async update${singular}(_: unknown, { id, input }: { id: string; input: Partial<Omit<${singular}, '_id'>> }) {
+    async update${singular}(_: unknown, { id, input }: { id: string; input: Partial<Omit<any, '_id'>> }) {
       if (!validator.isMongoId(id)) {
         throw new GraphQLError("Invalid ID format", { extensions: { code: "BAD_USER_INPUT", http: { status: 400 } } });
       }
@@ -340,9 +301,9 @@ export const resolvers = {
 };`.trim();
         }
         // --- File Writing ---
-        fs_1.default.mkdirSync(outDir, { recursive: true });
-        fs_1.default.writeFileSync(path_1.default.join(outDir, `${singular}.graphql`), gqlSchema);
-        fs_1.default.writeFileSync(path_1.default.join(outDir, `${singular}Resolver${ext}`), resolverCode);
+        fs.mkdirSync(outDir, { recursive: true });
+        fs.writeFileSync(path.join(outDir, `${singular}.graphql`), gqlSchema);
+        fs.writeFileSync(path.join(outDir, `${singular}Resolver${ext}`), resolverCode);
         // Pass the complete, merged set of scalars to the helper functions
         writeScalarResolvers(rootOutDir, useJS, allRequiredScalars);
         combiningResolverAndGraphQL(rootOutDir, useJS);
