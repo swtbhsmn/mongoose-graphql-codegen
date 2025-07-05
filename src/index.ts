@@ -34,26 +34,21 @@ function mapType(instance: string, casterInstance?: string, options?: any): Mapp
         case 'Array':
             const itemInfo = mapType(casterInstance || 'Mixed');
             return { type: `[${itemInfo.type}]`, scalar: itemInfo.scalar };
-        default: return { type: 'String' };
+        default:
+            console.warn(`[GraphQL Generator] Unmapped Mongoose type "${instance}". Defaulting to GraphQL "String".`);
+            return { type: 'String' };
     }
 }
 
+/**
+ * Writes the scalar resolvers file based on a given set of required scalars.
+ * This function does not read or write the central scalar list; it only generates the resolver code.
+ */
 function writeScalarResolvers(outputDir: string, useJS: boolean, requiredScalars: Set<keyof typeof ALL_SCALARS>) {
     if (requiredScalars.size === 0) {
         const emptyContent = useJS ? 'module.exports.scalarResolvers = {};' : 'export const scalarResolvers = {};';
         fs.writeFileSync(path.join(outputDir, `scalarResolvers${useJS ? '.js' : '.ts'}`), emptyContent);
-        fs.writeFileSync(path.join(outputDir, `customScalar.json`), JSON.stringify([]));
         return;
-    }
-    const outDir = path.join(process.cwd(), 'graphql-codegen', "customScalar.json")
-    const existing = fs.existsSync(outDir)
-        ? JSON.parse(fs.readFileSync(outDir, 'utf8'))
-        : [];
-
-    if (existing) {
-        existing.forEach((item: any) => {
-            requiredScalars.add(item)
-        })
     }
 
     const ext = useJS ? '.js' : '.ts';
@@ -117,85 +112,83 @@ function capitalize(str: string): string {
 }
 
 export async function generateGraphQL(modelFilePath: string, useJS: boolean = false): Promise<void> {
-    const absPath = path.resolve(modelFilePath);
+    try {
+        // ... all existing code from the function
+        const absPath = path.resolve(modelFilePath);
+        const modelModule = await import(absPath);
+        const model = modelModule.default || modelModule;
 
+        const modelName = model.modelName;
+        const schema = model.schema.paths;
+        const singular = modelName;
+        const plural = pluralize(singular);
 
+        const scalarsForThisModel = new Set<keyof typeof ALL_SCALARS>();
+        const nestedTypes: Record<string, Record<string, string>> = {};
 
-    const modelModule = await import(absPath);
-    const model = modelModule.default || modelModule;
+        let gqlFields = '';
+        let gqlInputFields = '';
 
-    const modelName = model.modelName;
-    const schema = model.schema.paths;
-    const singular = modelName;
-    const plural = pluralize(singular);
-    const requiredScalars = new Set<keyof typeof ALL_SCALARS>();
-    const nestedTypes: Record<string, Record<string, string>> = {};
+        for (const field in schema) {
+            if (field === '__v' || field === '_id') continue;
 
-    let gqlFields = '  _id: ID!\n';
-    for (const field in schema) {
-        if (field === '__v' || field === '_id') continue;
+            const fieldInfo = schema[field];
+            const { type: fieldType, scalar } = mapType(fieldInfo.instance, fieldInfo.caster?.instance, fieldInfo.options);
 
-        const fieldInfo = schema[field];
-        const { type: fieldType, scalar } = mapType(fieldInfo.instance, fieldInfo.caster?.instance, fieldInfo.options);
+            if (scalar) {
+                scalarsForThisModel.add(scalar);
+            }
 
-        // FIX: Add the scalar to the set BEFORE handling nesting logic.
-        // This ensures scalars from nested fields are always captured.
-        if (scalar) {
-            
-        const outDir = path.join(process.cwd(), 'graphql-codegen');
-        const filePath = path.join(outDir, 'customScalar.json');
+            if (field.includes('.')) {
+                const [parent, child] = field.split('.');
+                const nestedTypeName = capitalize(parent);
+                nestedTypes[nestedTypeName] = nestedTypes[nestedTypeName] || {};
+                nestedTypes[nestedTypeName][child] = fieldType;
+                continue;
+            }
 
-        // Ensure output directory exists
-        if (!fs.existsSync(outDir)) {
-        fs.mkdirSync(outDir, { recursive: true });
+            const isRequired = !!fieldInfo.isRequired;
+            const finalFieldType = isRequired ? `${fieldType}!` : fieldType;
+
+            gqlFields += `  ${field}: ${finalFieldType}\n`;
+            gqlInputFields += `  ${field}: ${finalFieldType}\n`;
         }
 
-        // Load existing scalars if the file exists
-        const existing = fs.existsSync(filePath)
-        ? JSON.parse(fs.readFileSync(filePath, 'utf8'))
-        : [];
-
-        // Add new scalar and remove duplicates
-        existing.push(scalar);
-        const uniqueScalars = [...new Set(existing)];
-
-        // Write to file
-        fs.writeFileSync(filePath, JSON.stringify(uniqueScalars, null, 2));
-            requiredScalars.add(scalar);
+        // Handle nested types by adding fields to the root type and input
+        for (const typeName in nestedTypes) {
+            const fieldName = typeName.toLowerCase();
+            gqlFields += `  ${fieldName}: ${typeName}\n`;
+            gqlInputFields += `  ${fieldName}: ${typeName}Input\n`;
         }
 
-        if (field.includes('.')) {
-            const [parent, child] = field.split('.');
-            const nestedTypeName = capitalize(parent);
-            nestedTypes[nestedTypeName] = nestedTypes[nestedTypeName] || {};
-            nestedTypes[nestedTypeName][child] = fieldType;
-            // Now it's safe to continue, as the scalar has been recorded.
-            continue;
-        }
+        // --- Centralized Scalar Management ---
+        const rootOutDir = path.join(process.cwd(), 'graphql-codegen');
+        const filePathScalar = path.join(rootOutDir, 'customScalar.json');
 
-        const isRequired = !!fieldInfo.isRequired;
-        const finalFieldType = isRequired ? `${fieldType}!` : fieldType;
-        gqlFields += `  ${field}: ${finalFieldType}\n`;
-    }
+        // 1. Read existing scalars from the central JSON file.
+        const existingScalars: (keyof typeof ALL_SCALARS)[] = fs.existsSync(filePathScalar)
+            ? JSON.parse(fs.readFileSync(filePathScalar, 'utf8'))
+            : [];
 
-    for (const typeName in nestedTypes) {
-        gqlFields += `  ${typeName.toLowerCase()}: ${typeName}\n`;
-    }
+        // 2. Merge existing scalars with scalars required by the current model.
+        const allRequiredScalars = new Set([...existingScalars, ...scalarsForThisModel]);
 
-    const nestedTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => `type ${typeName} {\n${Object.entries(fields).map(([f, t]) => `  ${f}: ${t}`).join('\n')}\n}`).join('\n\n');
-    const nestedInputTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => `input ${typeName}Input {\n${Object.entries(fields).map(([f, t]) => `  ${f}: ${t}`).join('\n')}\n}`).join('\n\n');
+        // 3. Write the complete, merged list back to the JSON file for future runs.
+        fs.mkdirSync(rootOutDir, { recursive: true });
+        fs.writeFileSync(filePathScalar, JSON.stringify(Array.from(allRequiredScalars), null, 2));
 
-    let gqlInputFields = gqlFields;
-    for (const typeName in nestedTypes) {
-        gqlInputFields = gqlInputFields.replace(new RegExp(`(${typeName.toLowerCase()}): ${typeName}`, 'g'), `$1: ${typeName}Input`);
-    }
 
-    const gqlType = `type ${singular} {\n${gqlFields}}`;
-    const gqlInput = `input ${singular}Input {\n${gqlInputFields}}`;
-    const gqlPaginationType = `type ${singular}PaginationResult {\n  data: [${singular}!]!\n  totalCount: Int!\n  hasNextPage: Boolean!\n  hasPreviousPage: Boolean!\n}`;
-    const scalarDeclarations = Array.from(requiredScalars).map(s => `scalar ${s}`).join('\n');
+        // --- GQL Schema Generation ---
+        const scalarDeclarations = Array.from(allRequiredScalars).map(s => `scalar ${s}`).join('\n');
 
-    const gqlSchema = `
+        const nestedTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => `type ${typeName} {\n${Object.entries(fields).map(([f, t]) => `  ${f}: ${t}`).join('\n')}\n}`).join('\n\n');
+        const nestedInputTypeDefs = Object.entries(nestedTypes).map(([typeName, fields]) => `input ${typeName}Input {\n${Object.entries(fields).map(([f, t]) => `  ${f}: ${t}`).join('\n')}\n}`).join('\n\n');
+
+        const gqlType = `type ${singular} {\n  _id: ID!\n${gqlFields}}`;
+        const gqlInput = `input ${singular}Input {\n${gqlInputFields}}`;
+        const gqlPaginationType = `type ${singular}PaginationResult {\n  data: [${singular}!]!\n  totalCount: Int!\n  hasNextPage: Boolean!\n  hasPreviousPage: Boolean!\n}`;
+
+        const gqlSchema = `
 ${scalarDeclarations}
 ${nestedTypeDefs}
 ${nestedInputTypeDefs}
@@ -212,17 +205,19 @@ type Mutation {
   delete${singular}(id: ID!): Boolean
 }`.trim().replace(/\n\n+/g, '\n\n').replace(/^(\s*\n){2,}/gm, '\n');
 
-    const outDir = path.join(process.cwd(), 'graphql-codegen', singular.toLowerCase());
-    const relPath = path.relative(outDir, absPath).replace(/\\/g, '/');
-    const ext = useJS ? '.js' : '.ts';
-    const importSyntax = useJS
-        ? `const { GraphQLError } = require('graphql');\nconst validator = require('validator');\nconst ${modelName} = require('${relPath}');`
-        : `import { GraphQLError } from 'graphql';\nimport validator from 'validator';\nimport type { ${singular} } from '${relPath}';\nimport ${modelName} from '${relPath}';`;
 
-    let resolverCode = '';
+        // --- Resolver Generation ---
+        const outDir = path.join(rootOutDir, singular.toLowerCase());
+        const relPath = path.relative(outDir, absPath).replace(/\\/g, '/');
+        const ext = useJS ? '.js' : '.ts';
+        const importSyntax = useJS
+            ? `const { GraphQLError } = require('graphql');\nconst validator = require('validator');\nconst ${modelName} = require('${relPath}');`
+            : `import { GraphQLError } from 'graphql';\nimport validator from 'validator';\nimport type { ${singular} } from '${relPath}';\nimport ${modelName} from '${relPath}';`;
 
-    if (useJS) {
-        resolverCode = `
+        let resolverCode = '';
+
+        if (useJS) {
+            resolverCode = `
 ${importSyntax}
 
 module.exports.resolvers = {
@@ -281,8 +276,8 @@ module.exports.resolvers = {
     },
   },
 };`.trim();
-    } else {
-        resolverCode = `
+        } else {
+            resolverCode = `
 ${importSyntax}
 
 export const resolvers = {
@@ -341,14 +336,22 @@ export const resolvers = {
     },
   },
 };`.trim();
+        }
+
+        // --- File Writing ---
+        fs.mkdirSync(outDir, { recursive: true });
+        fs.writeFileSync(path.join(outDir, `${singular}.graphql`), gqlSchema);
+        fs.writeFileSync(path.join(outDir, `${singular}Resolver${ext}`), resolverCode);
+
+        // Pass the complete, merged set of scalars to the helper functions
+        writeScalarResolvers(rootOutDir, useJS, allRequiredScalars);
+        combiningResolverAndGraphQL(rootOutDir, useJS);
+
+        console.log(`✅ Generated GraphQL schema and resolvers in graphql-codegen/${singular.toLowerCase()}`);
+
+    } catch (error) {
+        console.error(`❌ Failed to generate GraphQL files for ${modelFilePath}.`);
+        console.error(error);
+        process.exit(1);
     }
-
-    fs.mkdirSync(outDir, { recursive: true });
-    fs.writeFileSync(path.join(outDir, `${singular}.graphql`), gqlSchema);
-    fs.writeFileSync(path.join(outDir, `${singular}Resolver${ext}`), resolverCode); 
-    const rootOutDir = path.join(process.cwd(), 'graphql-codegen');
-    writeScalarResolvers(rootOutDir, useJS, requiredScalars);
-    combiningResolverAndGraphQL(rootOutDir, useJS);
-
-    console.log(`✅ Generated GraphQL schema and resolvers in graphql-codegen/${singular.toLowerCase()}`);
 }
