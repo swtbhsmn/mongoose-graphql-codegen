@@ -1,6 +1,6 @@
 {
   "name": "mongoose-graphql-codegen",
-  "version": "1.1.1",
+  "version": "1.1.4",
   "description": "Generate GraphQL schema and resolvers from Mongoose models (including BSON types)",
   "main": "dist/src/index.js",
   "bin": {
@@ -32,7 +32,6 @@
   "dependencies": {
     "@graphql-tools/load-files": "^7.0.1",
     "@graphql-tools/merge": "^9.0.24",
-    "bcrypt": "^6.0.0",
     "graphql": "^16.8.0",
     "graphql-scalars": "^1.22.5",
     "mongoose": "^7.6.1",

@@ -96,6 +96,7 @@ graphql-codegen/
   user/
     User.graphql
     UserResolver.js / .ts
+  index.ts
   scalarResolvers.js / .ts
 ```
 
@@ -119,7 +120,7 @@ async function createApolloServer() {
 
 module.exports = createApolloServer;
 
-// add.js
+// server.js
 const bodyParser = require('body-parser');
 const { expressMiddleware } = require('@apollo/server/express4');
 const createApolloServer = require('./graphql/server');
@@ -135,8 +136,7 @@ app.use('/graphql', bodyParser.json(), expressMiddleware(apolloServer));
 
 ## 📌 Coming Soon
 - `--outDir` support
-- GraphQL federation/directives
 
 ---
 
-MIT © 2025 — Built with ❤️ for modern devs.
+© 2025 — Built with ❤️ for modern devs.
