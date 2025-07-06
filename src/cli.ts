@@ -1,8 +1,7 @@
 #!/usr/bin/env node
-
 import path from 'path';
 import fs from 'fs';
-import { generateGraphQL } from '../src/index';
+import { generateGraphQL } from './generator';
 
 const args = process.argv.slice(2);
 const argMap: Record<string, string> = {};
@@ -45,11 +44,13 @@ modelPath ? (
       process.exit(1);
     })) :
   (
-    files.map((file) => {
-      generateGraphQL(outDir + "/" + file, useJS)
+    Promise.all(
+        files.map((file) => 
+        generateGraphQL(outDir + "/" + file, useJS)
         .catch((err) => {
           console.error('❌ Generation failed:', err.message);
           process.exit(1);
         })
-    })
+    )
+    )
   )
