@@ -203,7 +203,7 @@ type Mutation {
         const relPath = path.relative(outDir, absPath).replace(/\\/g, '/');
         const ext = useJS ? '.js' : '.ts';
         const importSyntax = useJS
-            ? `const { GraphQLError } = require('graphql');\nconst validator = require('validator');\nconst ${modelName} = require('../${relPath}');`
+            ? `const { GraphQLError } = require('graphql');\nconst validator = require('validator');\nconst ${modelName} = require('./${relPath}');`
             : `import { GraphQLError } from 'graphql';\nimport validator from 'validator';\nimport ${modelName} from '../${relPath}';`;
 
         let resolverCode = '';
