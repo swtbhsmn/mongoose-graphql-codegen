@@ -58,6 +58,8 @@ modelPath ? (
   )
 
 }
-main()
+if (require.main === module) {
+  main();
+}
 export {generateGraphQL}
 export default main;

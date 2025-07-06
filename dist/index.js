@@ -51,6 +51,8 @@ function main() {
             process.exit(1);
         }))));
 }
-main();
+if (require.main === module) {
+    main();
+}
 exports.default = main;
 //# sourceMappingURL=index.js.map
