@@ -3,7 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 import pluralize from 'pluralize';
-
+require('esbuild-register/dist/node').register();
 // A map of all available scalar types from graphql-scalars and their corresponding imports.
 const ALL_SCALARS = {
     JSON: 'GraphQLJSON',

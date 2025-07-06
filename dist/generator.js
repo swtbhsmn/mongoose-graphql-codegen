@@ -41,6 +41,7 @@ exports.generateGraphQL = generateGraphQL;
 const fs_1 = __importDefault(require("fs"));
 const path_1 = __importDefault(require("path"));
 const pluralize_1 = __importDefault(require("pluralize"));
+require('esbuild-register/dist/node').register();
 // A map of all available scalar types from graphql-scalars and their corresponding imports.
 const ALL_SCALARS = {
     JSON: 'GraphQLJSON',

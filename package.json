@@ -1,6 +1,6 @@
 {
   "name": "mongoose-graphql-codegen",
-  "version": "1.2.9",
+  "version": "1.2.15",
   "description": "A CLI tool to automatically generate GraphQL schemas and resolvers from Mongoose models.",
   "author": "Swetabh Suman <swtbhsmn@gmail.com>",
   "license": "MIT",
@@ -14,25 +14,18 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "mongoose-graphql-codegen": "dist/cli.js"
+    "mongoose-graphql-codegen": "dist/index.js"
   },
   "module": "dist/index.js",
-  "exports": {
-    ".": {
-      "require": "./dist/index.js",
-      "import": "./dist/index.js"
-    },
-    "./cli": {
-      "require": "./dist/cli.js"
-    }
-  },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build",
-    "generate": "node ./dist/cli.js"
+    "generate": "node ./dist/index.js",
+    "generate:ts": "ts-node ./src/index.ts"
   },
   "engines": {
     "node": ">=18"
@@ -40,6 +33,7 @@
   "dependencies": {
     "@graphql-tools/load-files": "^7.0.1",
     "@graphql-tools/merge": "^9.0.24",
+    "esbuild-register": "^3.6.0",
     "graphql": "^16.11.0",
     "graphql-scalars": "^1.24.2",
     "mongoose": "^8.16.1",
