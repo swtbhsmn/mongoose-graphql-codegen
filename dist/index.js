@@ -21,6 +21,7 @@ function main() {
     const modelPath = argMap['model'];
     const useJS = argMap['js'] === 'true';
     const outDir = path_1.default.join(process.cwd(), 'models');
+    const externalOutputPath = argMap['outDir'];
     const files = [];
     if (!modelPath) {
         if (fs_1.default.existsSync(outDir)) {
@@ -40,12 +41,12 @@ function main() {
             process.exit(1);
         }
     }
-    modelPath ? ((0, generator_1.generateGraphQL)(path_1.default.resolve(modelPath), useJS)
+    modelPath ? ((0, generator_1.generateGraphQL)(path_1.default.resolve(modelPath), useJS, externalOutputPath)
         .catch((err) => {
         console.error('❌ Generation failed:', err.message);
         process.exit(1);
     })) :
-        (Promise.all(files.map((file) => (0, generator_1.generateGraphQL)(outDir + "/" + file, useJS)
+        (Promise.all(files.map((file) => (0, generator_1.generateGraphQL)(outDir + "/" + file, useJS, externalOutputPath)
             .catch((err) => {
             console.error('❌ Generation failed:', err.message);
             process.exit(1);

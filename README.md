@@ -22,15 +22,6 @@ npm install -D mongoose-graphql-codegen
 
 ---
 
-## 📋 Prerequisites
-
-Your project must include:
-```bash
-npm install mongoose graphql graphql-scalars validator pluralize @graphql-tools/load-files @graphql-tools/merge
-```
-
----
-
 ## 🧠 Example Mongoose Model
 
 ```js
